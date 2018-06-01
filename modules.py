@@ -17,11 +17,12 @@ def embedding(inputs, shape=None, scope="word_embedding", reuse=None):
 def highway_layer(inputs, use_bias, transform_bias=-1.0, scope="highway_layer", reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
         dims = inputs.get_shape()[-1]
-        z = tf.layers.dense(inputs, dims, use_bias=use_bias)
+        #TODO: proper dense W and B initializers using glorot?
+        z = tf.layers.dense(inputs, dims, use_bias=use_bias, name='highway_dense_1', reuse=reuse)
         activation = tf.nn.relu(z)
-        transform_gate = tf.layers.dense(inputs, dims, use_bias=use_bias, bias_initializer=tf.constant_initializer(transform_bias))
+        transform_gate = tf.layers.dense(inputs, dims, use_bias=use_bias, bias_initializer=tf.constant_initializer(transform_bias), name='highway_dense_2', reuse=reuse)
         transform_gate = tf.nn.sigmoid(transform_gate)
-        outputs = transform_gate * activation + (1 - transform_gate) * activation
+        outputs = transform_gate * activation + (1 - transform_gate) * inputs
         return outputs                    
 
 
@@ -29,4 +30,102 @@ def highway_network(inputs, num_layers=2, use_bias=True, transform_bias=-1.0, sc
     with tf.variable_scope(scope, reuse=reuse):
         for layer_id in range(num_layers):
             inputs = highway_layer(inputs, use_bias, transform_bias, scope='highway_layer_{}'.format(layer_id), reuse=reuse)
-        return inputs            
+        return inputs         
+
+
+def positional_encoding(inputs, scope='positional_enc', reuse=None):
+    batch_size, max_length, dims = inputs.get_shape().as_list()   
+    with tf.variable_scope(scope, reuse=reuse):
+        #create index matrix of shape=[batch_size, max_length] for future lookup
+        pos_ind = tf.tile(tf.expand_dims(tf.range(max_length), 0), [batch_size, 1])
+        
+        #creating position encoding matrix
+        pos_enc_matrix = np.array([[pos / np.power(10000, 2.*i/num_units) for i in range(num_units)] for pos in range(T)])
+        #applying sin to odd columns
+        pos_enc_matrix[:, 0::2] = np.sin(pos_enc_matrix[:, 0::2]) 
+        #applying cosine to even columns
+        pos_enc_matrix[:, 1::2] = np.cos(pos_enc_matrix[:, 1::2])
+        pos_enc_matrix = tf.convert_to_tensor(pos_enc_matrix)
+        
+        outputs = tf.nn.embedding_lookup(pos_enc_matrix, pos_ind)
+        return outputs
+                
+
+def convolution(inputs, filters, kernel_size, scope, reuse=None):
+    #TODO: to reuse layers is it ok to put reuse outside in variable scope, or should reuse be put inside the layer call with same name, or use layers which have scope also    
+    with tf.variable_scope(scope, reuse=reuse): 
+        #layernorm
+        outputs = tf.contrib.layers.layer_norm(inputs, scope='norm_'+scope, reuse=reuse)
+        #1D convolution
+        outputs = tf.layers.conv1d(outputs, filters, kernel_size, padding="same", name='conv_'+scope, reuse=reuse)
+        #residual link
+        outputs += inputs
+        return outputs
+                                                               
+
+def multi_head_attention(queries, keys, values, inputs, heads=8, scope='multi_head_attention', reuse=None):
+    #applies a multi head attention in a self attention fashion
+    with tf.variable_scope(scope, reuse=reuse): 
+        Q = queries
+        K = keys
+        V = values
+        #split into # of head parts
+        Q_s = tf.split(Q, num_heads, axis=2)
+        K_s = tf.split(K, num_heads, axis=2)
+        V_s = tf.split(V, num_heads, axis=2)
+        #project using different learned linear projections
+        Q_s = [tf.layers.dense(q, num_units, activation=tf.nn.relu) for q in Q_s]
+        K_s = [tf.layers.dense(q, num_units, activation=tf.nn.relu) for k in K_s]
+        V_s = [tf.layers.dense(q, num_units, activation=tf.nn.relu) for v in V_s]
+        #concatenate different projections for parallel scaled dot product attention
+        Q_c = tf.concat(Q_s, axis=0)
+        K_c = tf.concat(K_s, axis=0)
+        V_c = tf.concat(V_s, axis=0)
+        #perform a scaled dot product attention in parallel for all heads
+        outputs = tf.matmul(Q_c, tf.transpose(K_c, [0, 2, 1]))
+        #scale outputs using square_root(K.shape[-1])
+        outputs = outputs / (K_.get_shape().as_list()[-1] ** 0.5)
+        #applying softmax normalization
+        outputs = tf.nn.softmax(outputs)
+        #applying weights on values
+        outputs = tf.matmul(outputs, V_)
+        #restore shape of values to original input shape
+        outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2 )        
+        #residual link
+        outputs += queries
+        return outputs
+
+
+def feedforward(inputs, scope='feedforward', reuse=None):
+    with tf.variable_scope(scope, reuse=reuse): 
+        #layernorm
+        outputs = tf.contrib.layers.layer_norm(inputs, scope='norm_'+scope, reuse=reuse)
+        #dense layer
+        dims = outputs.get_shape()[-1]        
+        outputs = tf.layers.dense(outputs, dims, activations=tf.nn.relu, name='dense_'+scope, reuse=reuse)
+        #residual link
+        outputs += inputs
+        return outputs
+
+
+def encoder_block(inputs, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=None, flag_first=False):
+    with tf.variable_scope(scope, reuse=reuse):
+        #add positional encoding
+        inputs += positional_encoding(inputs, scope='positional_enc', reuse=reuse)
+        #convolution layers        
+        for layer_id in range(num_conv_layer):
+            inputs = convolution(inputs, filters, kernel_size, scope='layer_{}'.format(layer_id), reuse=reuse)
+        #self-attention using multi head attention layer                
+        outputs = multi_head_attention(queries=inputs, keys=inputs, values=inputs, heads=num_att_head, scope='multi_head_attention', reuse=reuse)
+        #feedforward layer
+        outputs = feedforward(outputs, scope='feedforward', reuse=reuse)
+        return outputs
+        
+        
+        
+
+
+
+
+
+

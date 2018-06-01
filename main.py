@@ -11,5 +11,5 @@ if __name__ == '__main__':
         print g.x_q_c_emb.shape
         print g.x_c_emb.shape
         print g.x_q_emb.shape
-        print g.x_c_emb_h.shape
-        print g.x_q_emb_h.shape
+    
+        

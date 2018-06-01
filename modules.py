@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 def load_word_vocab():
     pass
@@ -40,12 +41,12 @@ def positional_encoding(inputs, scope='positional_enc', reuse=None):
         pos_ind = tf.tile(tf.expand_dims(tf.range(max_length), 0), [batch_size, 1])
         
         #creating position encoding matrix
-        pos_enc_matrix = np.array([[pos / np.power(10000, 2.*i/num_units) for i in range(num_units)] for pos in range(T)])
+        pos_enc_matrix = np.array([[pos / np.power(10000, 2.*i/dims) for i in range(dims)] for pos in range(max_length)])
         #applying sin to odd columns
         pos_enc_matrix[:, 0::2] = np.sin(pos_enc_matrix[:, 0::2]) 
         #applying cosine to even columns
         pos_enc_matrix[:, 1::2] = np.cos(pos_enc_matrix[:, 1::2])
-        pos_enc_matrix = tf.convert_to_tensor(pos_enc_matrix)
+        pos_enc_matrix = tf.convert_to_tensor(pos_enc_matrix, dtype=tf.float32)
         
         outputs = tf.nn.embedding_lookup(pos_enc_matrix, pos_ind)
         return outputs
@@ -57,26 +58,29 @@ def convolution(inputs, filters, kernel_size, scope, reuse=None):
         #layernorm
         outputs = tf.contrib.layers.layer_norm(inputs, scope='norm_'+scope, reuse=reuse)
         #1D convolution
-        outputs = tf.layers.conv1d(outputs, filters, kernel_size, padding="same", name='conv_'+scope, reuse=reuse)
-        #residual link
-        outputs += inputs
+        outputs = tf.layers.conv1d(outputs, filters, kernel_size, padding="same", name='conv_'+scope, reuse=reuse)        
+        #if inputs are compatible with outputs for residual link
+        if(inputs.get_shape()[-1] == outputs.get_shape()[-1]):
+            #residual link
+            outputs += inputs
         return outputs
                                                                
 
-def multi_head_attention(queries, keys, values, inputs, heads=8, scope='multi_head_attention', reuse=None):
+def multi_head_attention(queries, keys, values, num_heads=8, scope='multi_head_attention', reuse=None):
     #applies a multi head attention in a self attention fashion
     with tf.variable_scope(scope, reuse=reuse): 
         Q = queries
         K = keys
         V = values
+        dims = queries.get_shape().as_list()[-1] / num_heads
         #split into # of head parts
         Q_s = tf.split(Q, num_heads, axis=2)
         K_s = tf.split(K, num_heads, axis=2)
         V_s = tf.split(V, num_heads, axis=2)
         #project using different learned linear projections
-        Q_s = [tf.layers.dense(q, num_units, activation=tf.nn.relu) for q in Q_s]
-        K_s = [tf.layers.dense(q, num_units, activation=tf.nn.relu) for k in K_s]
-        V_s = [tf.layers.dense(q, num_units, activation=tf.nn.relu) for v in V_s]
+        Q_s = [tf.layers.dense(q, dims, activation=tf.nn.relu) for q in Q_s]
+        K_s = [tf.layers.dense(q, dims, activation=tf.nn.relu) for k in K_s]
+        V_s = [tf.layers.dense(q, dims, activation=tf.nn.relu) for v in V_s]
         #concatenate different projections for parallel scaled dot product attention
         Q_c = tf.concat(Q_s, axis=0)
         K_c = tf.concat(K_s, axis=0)
@@ -84,12 +88,12 @@ def multi_head_attention(queries, keys, values, inputs, heads=8, scope='multi_he
         #perform a scaled dot product attention in parallel for all heads
         outputs = tf.matmul(Q_c, tf.transpose(K_c, [0, 2, 1]))
         #scale outputs using square_root(K.shape[-1])
-        outputs = outputs / (K_.get_shape().as_list()[-1] ** 0.5)
+        outputs = outputs / (K_s[0].get_shape().as_list()[-1] ** 0.5)
         #applying softmax normalization
         outputs = tf.nn.softmax(outputs)
         #applying weights on values
-        outputs = tf.matmul(outputs, V_)
         #restore shape of values to original input shape
+        outputs = tf.matmul(outputs, V_c)
         outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2 )        
         #residual link
         outputs += queries
@@ -102,21 +106,22 @@ def feedforward(inputs, scope='feedforward', reuse=None):
         outputs = tf.contrib.layers.layer_norm(inputs, scope='norm_'+scope, reuse=reuse)
         #dense layer
         dims = outputs.get_shape()[-1]        
-        outputs = tf.layers.dense(outputs, dims, activations=tf.nn.relu, name='dense_'+scope, reuse=reuse)
+        outputs = tf.layers.dense(outputs, dims, activation=tf.nn.relu, name='dense_'+scope, reuse=reuse)
         #residual link
         outputs += inputs
         return outputs
 
 
-def encoder_block(inputs, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=None, flag_first=False):
+def encoder_block(inputs, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
+        print scope
         #add positional encoding
         inputs += positional_encoding(inputs, scope='positional_enc', reuse=reuse)
         #convolution layers        
         for layer_id in range(num_conv_layer):
             inputs = convolution(inputs, filters, kernel_size, scope='layer_{}'.format(layer_id), reuse=reuse)
         #self-attention using multi head attention layer                
-        outputs = multi_head_attention(queries=inputs, keys=inputs, values=inputs, heads=num_att_head, scope='multi_head_attention', reuse=reuse)
+        outputs = multi_head_attention(queries=inputs, keys=inputs, values=inputs, num_heads=num_att_head, scope='multi_head_attention', reuse=reuse)
         #feedforward layer
         outputs = feedforward(outputs, scope='feedforward', reuse=reuse)
         return outputs

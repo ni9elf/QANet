@@ -1,6 +1,7 @@
 from params import Params as param
 import modules as my
 import tensorflow as tf
+import numpy as np
 
 
 class Graph(object):
@@ -14,7 +15,7 @@ class Graph(object):
             self.x_q_w =  tf.placeholder(tf.int32, shape=[B, M], name="question_words")
             self.x_q_c = tf.placeholder(tf.int32, shape=[B, M, C], name="context_question_chars")
             #TODO: check output format
-            self.y = tf.placeholder(tf.int32, shape=[B, 2, N], name="out")
+            self.y = tf.placeholder(tf.int32, shape=[B, N, 2], name="out")
              
                        
                        
@@ -33,54 +34,62 @@ class Graph(object):
             self.x_q_emb = tf.concat(values=[self.x_q_w_emb, self.x_q_c_emb], axis=2, name="x_question_emb")            
             
             #highway network of 2 layers
-            self.x_c_emb_h = my.highway_network(inputs=self.x_c_emb, num_layers=param.highway_num_layers, use_bias=True, transform_bias=-1.0, scope='highway_net', reuse=None)
-            self.x_q_emb_h = my.highway_network(inputs=self.x_q_emb, num_layers=param.highway_num_layers, use_bias=True, transform_bias=-1.0, scope='highway_net',  reuse=True)            
+            self.x_c_emb = my.highway_network(inputs=self.x_c_emb, num_layers=param.highway_num_layers, use_bias=True, transform_bias=-1.0, scope='highway_net', reuse=None)
+            self.x_q_emb = my.highway_network(inputs=self.x_q_emb, num_layers=param.highway_num_layers, use_bias=True, transform_bias=-1.0, scope='highway_net',  reuse=True)            
             
             
             
             #part2: an embedding encoder layer
-            self.x_w_enc = my.encoder_block(inputs=self.x_w_emb, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=None, flag_first=True)
-            self.q_enc = my.encoder_block(inputs=self.x_w_emb, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=True, flag_first=True)
+            self.x_c_enc = my.encoder_block(inputs=self.x_c_emb, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=None)
+            self.x_q_enc = my.encoder_block(inputs=self.x_q_emb, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=True)
             
             
            
             #part3: a context-query attention layer
-            self.att_a, self.att_b = my.context_query_attention(context=self.x_w_enc, query=self.c_q_enc, scope='context_query_att', reuse=None)
+            self.att_a, self.att_b = my.context_query_attention(context=self.x_c_enc, query=self.x_q_enc, scope='context_query_att', reuse=None)
             
             
             
             #part4: a model encoder layer
-            self.c_mult_att_a = tf.multiply(self.x_w_enc, self.att_a)
-            self.c_mult_att_b = tf.multiply(self.x_w_enc, self.att_b)
-            self.model_enc = tf.concat(values=[x_w_enc, att_a, c_mult_att_a, c_mult_att_b], axis=2, name="model_enc_inp")
+            self.c_mult_att_a = tf.multiply(self.x_c_enc, self.att_a)
+            self.c_mult_att_b = tf.multiply(self.x_c_enc, self.att_b)
+            self.model_enc = tf.reduce_mean(tf.concat([tf.expand_dims(self.x_c_enc, 2), tf.expand_dims(self.att_a, 2), tf.expand_dims(self.c_mult_att_a, 2), tf.expand_dims(self.c_mult_att_b, 2)], axis=2), axis=2, name="model_enc_inp")
+            print self.model_enc
             for i in range(3):                
                 for j in range(7):
                     #the call to the first model encoder block in each stack will have reuse None
                     if (i == 0):
-                        self.model_enc = my.encoder_block(inputs=self.model_enc, num_conv_layer=2, filters=128, kernel_size=7, num_att_head=8, scope='model_enc_block_{}'.format(j), reuse=None, flag_first=False)
+                        self.model_enc = my.encoder_block(inputs=self.model_enc, num_conv_layer=2, filters=128, kernel_size=5, num_att_head=8, scope='model_enc_block_{}'.format(j), reuse=None)
                     #subsequent blocks in each stack (block 2 to 7) will have reuse True since each stack shares weights across blocks
                     else:
-                        self.model_enc = my.encoder_block(inputs=self.model_enc, num_conv_layer=2, filters=128, kernel_size=7, num_att_head=8, scope='model_enc_block_{}'.format(j), reuse=True, flag_first=False)
+                        self.model_enc = my.encoder_block(inputs=self.model_enc, num_conv_layer=2, filters=128, kernel_size=5, num_att_head=8, scope='model_enc_block_{}'.format(j), reuse=True)
                 if (i == 1):
                     #store model_enc as output M0 after completion of run of first stack of model encoder blocks
                     #model encoder blocks executed: 7
                     #using tf.identity to copy a tensor
-                    self.out_m0 = tf.identity(model_enc)
+                    self.out_m0 = tf.identity(self.model_enc)
                     #store model_enc as output M1 after completion of run of second stack of model encoder blocks
                     #model encoder blocks executed: 14
                 elif(i==2):
-                    self.out_m1 = tf.identity(model_enc)
+                    self.out_m1 = tf.identity(self.model_enc)
                     #store model_enc as output M2 after completion of run of third stack of model encoder blocks
                     #model encoder blocks executed: 21
                 else:
-                    self.out_m2 = tf.identity(model_enc)            
+                    self.out_m2 = tf.identity(self.model_enc)            
                     
                     
                     
             #part5: an output layer      
-            inp_pos1 = tf.concat((out_m0, out_m1), axis=2)
-            inp_pos2 = tf.concat((out_m0, out_m2), axis=2)                             
-            pos1 = tf.softmax(tf.layers.dense(inp_pos1, 1, activation=tf.tanh, name='dense_pos1', reuse=reuse))
-            pos2 = tf.softmax(tf.layers.dense(inp_pos2, 1, activation=tf.tanh, name='dense_pos2', reuse=reuse))
+            self.inp_pos1 = tf.concat((self.out_m0, self.out_m1), axis=2)
+            self.inp_pos2 = tf.concat((self.out_m0, self.out_m2), axis=2)                             
+            self.pos1 = tf.nn.softmax(tf.layers.dense(self.inp_pos1, 1, activation=tf.tanh, name='dense_pos1'))
+            self.pos2 = tf.nn.softmax(tf.layers.dense(self.inp_pos2, 1, activation=tf.tanh, name='dense_pos2'))
+            self.pred = tf.concat((self.pos1, self.pos2), axis = -1)
+            self.loss = tf.reduce_mean(-tf.log(tf.reduce_prod(tf.reduce_sum(self.pred * tf.cast(self.y, 'float'), 1), 1) + param.epsilon_1))            
             
-            self.loss = tf.reduce_mean(-tf.log(tf.reduce_prod(tf.reduce_sum(self.yp * tf.cast(self.y, 'float'), 1), 1) + param.epsilon))            
+            # Training Scheme
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=param.lr, beta1=param.beta1, beta2=param.beta2, epsilon=param.epsilon_2)
+            self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+            tf.summary.scalar('loss', self.loss)
+            self.merged = tf.summary.merge_all()

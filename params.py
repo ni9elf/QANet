@@ -8,4 +8,8 @@ class Params(object):
     char_emb_dim = 200
     max_chars = 16
     highway_num_layers = 2
-    epsilon = 1e-30
+    epsilon_1 = 1e-30
+    epsilon_2 = 1e-7
+    beta1 = 0.8
+    beta2 = 0.999
+    lr = 1e-2

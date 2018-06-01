@@ -39,8 +39,8 @@ class Graph(object):
             
             
             #part2: an embedding encoder layer
-            self.x_w_enc = my.encoder_block(inputs=self.x_w_emb, num_conv_layer=4, scope='encoder_block', reuse=None, flag_first=True)
-            self.q_enc = my.encoder_block(inputs=self.x_w_emb, num_conv_layer=4, scope='encoder_block', reuse=True, flag_first=True)
+            self.x_w_enc = my.encoder_block(inputs=self.x_w_emb, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=None, flag_first=True)
+            self.q_enc = my.encoder_block(inputs=self.x_w_emb, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=True, flag_first=True)
             
             
            
@@ -56,26 +56,31 @@ class Graph(object):
             for i in range(3):                
                 for j in range(7):
                     #the call to the first model encoder block in each stack will have reuse None
-                    if (j == 0):
-                        self.model_enc = my.encoder_block(inputs=self.model_enc, scope='model_enc_stack_{}'.format(i), reuse=None, flag_first=True)
+                    if (i == 0):
+                        self.model_enc = my.encoder_block(inputs=self.model_enc, num_conv_layer=2, filters=128, kernel_size=7, num_att_head=8, scope='model_enc_block_{}'.format(j), reuse=None, flag_first=False)
                     #subsequent blocks in each stack (block 2 to 7) will have reuse True since each stack shares weights across blocks
                     else:
-                        self.model_enc = my.encoder_block(inputs=self.model_enc, scope='model_enc_stack_{}'.format(i), reuse=True, flag_first=True)
+                        self.model_enc = my.encoder_block(inputs=self.model_enc, num_conv_layer=2, filters=128, kernel_size=7, num_att_head=8, scope='model_enc_block_{}'.format(j), reuse=True, flag_first=False)
                 if (i == 1):
                     #store model_enc as output M0 after completion of run of first stack of model encoder blocks
                     #model encoder blocks executed: 7
                     #using tf.identity to copy a tensor
-                    out_m0 = tf.identity(model_enc)
+                    self.out_m0 = tf.identity(model_enc)
                     #store model_enc as output M1 after completion of run of second stack of model encoder blocks
                     #model encoder blocks executed: 14
                 elif(i==2):
-                    out_m1 = tf.identity(model_enc)
+                    self.out_m1 = tf.identity(model_enc)
                     #store model_enc as output M2 after completion of run of third stack of model encoder blocks
                     #model encoder blocks executed: 21
                 else:
-                    out_m2 = tf.identity(model_enc)            
+                    self.out_m2 = tf.identity(model_enc)            
                     
                     
                     
-            #part5: an output layer                                      
+            #part5: an output layer      
+            inp_pos1 = tf.concat((out_m0, out_m1), axis=2)
+            inp_pos2 = tf.concat((out_m0, out_m2), axis=2)                             
+            pos1 = tf.softmax(tf.layers.dense(inp_pos1, 1, activation=tf.tanh, name='dense_pos1', reuse=reuse))
+            pos2 = tf.softmax(tf.layers.dense(inp_pos2, 1, activation=tf.tanh, name='dense_pos2', reuse=reuse))
             
+            self.loss = tf.reduce_mean(-tf.log(tf.reduce_prod(tf.reduce_sum(self.yp * tf.cast(self.y, 'float'), 1), 1) + param.epsilon))            

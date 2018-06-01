@@ -1,3 +1,7 @@
+'''
+File qanet.py defines the Tensorflow computation graph for the QANet architecture using OOP and modularity. The skeleton of the architecture from inputs to outputs in defined here using calls to wrapper functions defined in modules.py to take care of the inner working of each component. This makes the graph definition easy to code, read and understand. The advantages of OOP, especially abstraction of weight / Tensor sharing and encapsulation of sub component / layer inner working can be realized. Modularity ensures that the functioning of a component can be easily modified in modules.py without changing the skeleton of the QANet architecture defined in this file.
+'''
+
 from params import Params as param
 import modules as my
 import tensorflow as tf
@@ -14,7 +18,6 @@ class Graph(object):
             self.x_c_c = tf.placeholder(tf.int32, shape=[B, N, C], name="context_word_chars")
             self.x_q_w =  tf.placeholder(tf.int32, shape=[B, M], name="question_words")
             self.x_q_c = tf.placeholder(tf.int32, shape=[B, M, C], name="context_question_chars")
-            #TODO: check output format
             self.y = tf.placeholder(tf.int32, shape=[B, N, 2], name="out")
              
                        

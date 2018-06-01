@@ -1,3 +1,7 @@
+'''
+File params.py defines a class Params for hyperparameter declarations.
+'''
+
 class Params(object):
     batch_size = 32
     max_context_words = 40

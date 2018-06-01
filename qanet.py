@@ -53,8 +53,7 @@ class Graph(object):
             #part4: a model encoder layer
             self.c_mult_att_a = tf.multiply(self.x_c_enc, self.att_a)
             self.c_mult_att_b = tf.multiply(self.x_c_enc, self.att_b)
-            self.model_enc = tf.reduce_mean(tf.concat([tf.expand_dims(self.x_c_enc, 2), tf.expand_dims(self.att_a, 2), tf.expand_dims(self.c_mult_att_a, 2), tf.expand_dims(self.c_mult_att_b, 2)], axis=2), axis=2, name="model_enc_inp")
-            print self.model_enc
+            self.model_enc = tf.reduce_mean(tf.concat([tf.expand_dims(self.x_c_enc, 2), tf.expand_dims(self.att_a, 2), tf.expand_dims(self.c_mult_att_a, 2), tf.expand_dims(self.c_mult_att_b, 2)], axis=2), axis=2, name="model_enc_inp")            
             for i in range(3):                
                 for j in range(7):
                     #the call to the first model encoder block in each stack will have reuse None

@@ -1,9 +1,6 @@
 import tensorflow as tf
 import numpy as np
 
-def load_word_vocab():
-    pass
-
 
 def embedding(inputs, shape=None, scope="word_embedding", reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
@@ -114,7 +111,6 @@ def feedforward(inputs, scope='feedforward', reuse=None):
 
 def encoder_block(inputs, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=None):
     with tf.variable_scope(scope, reuse=reuse):
-        print scope
         #add positional encoding
         inputs += positional_encoding(inputs, scope='positional_enc', reuse=reuse)
         #convolution layers        
@@ -146,13 +142,3 @@ def context_query_attention(context, query, scope='context_query_att', reuse=Non
         matrix_a = tf.matmul(similarity, query)
         matrix_b = tf.matmul(tf.matmul(similarity, tf.transpose(similarity, [0, 2, 1])), context)
         return matrix_a, matrix_b
-        
-    
-            
-        
-
-
-
-
-
-

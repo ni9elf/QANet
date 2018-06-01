@@ -121,7 +121,29 @@ def encoder_block(inputs, num_conv_layer=4, filters=128, kernel_size=7, num_att_
         outputs = feedforward(outputs, scope='feedforward', reuse=reuse)
         return outputs
         
+
+def context_query_attention(context, query, scope='context_query_att', reuse=None):
+    #batch_size, max_words_context, word_dimension
+    B, N, d = context.get_shape().as_list()
+    #batch_size, max_words_question, word_dimension
+    B, M, d = query.get_shape().as_list()
+    with tf.variable_scope(scope, reuse=reuse): 
+        #[B, N, d] -> [B, N, M, d]
+        context_expand = tf.tile(tf.expand_dims(context, 2), [1, 1, M, 1])
+        #[B, M, d] -> [B, N, M, d]
+        query_expand = tf.tile(tf.expand_dims(query, 1), [1, N, 1, 1])
+        #concat(q, c, (q)dot(c))
+        mat = tf.concat((query_expand, context_expand, query_expand * context_expand), axis=3)
+        #trilinear function as a linear dense layer
+        #TODO: no need to give 'dense_'+scope, just name since scope/name automatic
+        similarity = tf.layers.dense(mat, 1, name='dense_'+scope, reuse=reuse)
+        similarity = tf.squeeze(similarity)
+        matrix_a = tf.matmul(similarity, query)
+        matrix_b = tf.matmul(tf.matmul(similarity, tf.transpose(similarity, [0, 2, 1])), context)
+        return matrix_a, matrix_b
         
+    
+            
         
 
 

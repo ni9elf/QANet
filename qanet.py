@@ -45,7 +45,7 @@ class Graph(object):
             
            
             #part3: a context-query attention layer
-            self.att_a, self.att_b = my.context_query_attention(input1=self.x_w_enc, input2=self.c_q_enc, scope='context_query_att', reuse=None)
+            self.att_a, self.att_b = my.context_query_attention(context=self.x_w_enc, query=self.c_q_enc, scope='context_query_att', reuse=None)
             
             
             
@@ -73,4 +73,9 @@ class Graph(object):
                     #store model_enc as output M2 after completion of run of third stack of model encoder blocks
                     #model encoder blocks executed: 21
                 else:
-                    out_m2 = tf.identity(model_enc)                                                  
+                    out_m2 = tf.identity(model_enc)            
+                    
+                    
+                    
+            #part5: an output layer                                      
+            

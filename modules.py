@@ -103,21 +103,12 @@ def multi_head_attention(queries, keys, values, num_heads=8, scope="multi_head_a
     #applies a multi head attention in a self attention fashion since queries, keys and values in QANet are the same Tensor
     with tf.variable_scope(scope, reuse=reuse): 
         #use layernorm before applying multi_head_attention
-        #if all inputs are equal implying self attention, perform layernorm on any one input tensor
-        if (tf.equal(queries, keys) and tf.equal(queries, values) and tf.equal(keys, values)):        
-            queries = tf.contrib.layers.layer_norm(queries, scope="layernorm", reuse=reuse)
-            #dimension=[B, N, d] ([batch_size, max_seq_length, hidden_state_dimension])
-            Q = queries
-            K = queries
-            V = queries        
-        else:
-            queries = tf.contrib.layers.layer_norm(queries, scope="layernorm", reuse=reuse)
-            keys = tf.contrib.layers.layer_norm(keys, scope="layernorm", reuse=reuse)
-            values = tf.contrib.layers.layer_norm(values, scope="layernorm", reuse=reuse)
-            #dimension=[B, N, d] ([batch_size, max_seq_length, hidden_state_dimension])
-            Q = queries
-            K = keys
-            V = values
+        #all inputs are equal since we are using self attention, we perform layernorm on any one input tensor       
+        queries_norm = tf.contrib.layers.layer_norm(queries, scope="layernorm", reuse=reuse)
+        #dimension=[B, N, d] ([batch_size, max_seq_length, hidden_state_dimension])
+        Q = queries_norm
+        K = queries_norm
+        V = queries_norm        
         #compute the dimension of each head (parallel attention layer)
         #in QANet this will be (hidden_state_dimension / num_heads) = 128 / 8 = 16
         dims = queries.get_shape().as_list()[-1] / num_heads

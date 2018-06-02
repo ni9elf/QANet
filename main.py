@@ -14,3 +14,4 @@ if __name__ == '__main__':
     with tf.Session() as sess:
         #initialize all global variables in the graph
         sess.run(tf.global_variables_initializer())         
+        print "Computation graph for QANet created"

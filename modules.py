@@ -6,6 +6,53 @@ Author: Nigel Fernandez
 
 import tensorflow as tf
 import numpy as np
+from params import Params as param
+
+
+def get_one_hot(targets, nb_classes):
+    '''
+    Returns one hot encoding of targets over nb_classes
+    '''
+    return np.eye(nb_classes)[np.array(targets).reshape(-1)]
+    
+    
+def get_batch_data():
+    '''
+    Generates dummy input data to test architecture pipeline and training execution
+    '''
+    #generate random data for context and words
+    #inputs
+    x_c_w = np.random.randint(low=0, high=param.word_vocab_size, size=(param.num_samples, param.max_context_words))
+    x_c_c = np.random.randint(low=0, high=param.char_vocab_size, size=(param.num_samples, param.max_context_words, param.max_chars))
+    x_q_w = np.random.randint(low=0, high=param.word_vocab_size, size=(param.num_samples, param.max_question_words))
+    x_q_c = np.random.randint(low=0, high=param.char_vocab_size, size=(param.num_samples, param.max_question_words, param.max_chars))
+    #outputs
+    y1 = np.random.randint(low=0, high=param.max_context_words, size=(param.num_samples, param.max_context_words))
+    y2 = np.random.randint(low=0, high=param.max_context_words, size=(param.num_samples, param.max_context_words))
+    #get one hot encoding
+    y1_one_hot = get_one_hot(y1, param.max_context_words)
+    y2_one_hot = get_one_hot(y2, param.max_context_words)
+    #concatenate pos1 and pos2 one hot encoding
+    y = np.concatenate((np.expand_dims(y1, 2), np.expand_dims(y2, 2)), axis=2)   
+    
+    #convert to tensor
+    x_c_w = tf.convert_to_tensor(x_c_w, tf.int32)
+    x_c_c = tf.convert_to_tensor(x_c_c, tf.int32)
+    x_q_w = tf.convert_to_tensor(x_q_w, tf.int32)
+    x_q_c = tf.convert_to_tensor(x_q_c, tf.int32)
+    y = tf.convert_to_tensor(y, tf.int32)
+    
+    #create input queues
+    input_queues = tf.train.slice_input_producer([x_c_w, x_c_c, x_q_w, x_q_c, y])
+    
+    # create batch queues
+    x_c_w, x_c_c, x_q_w, x_q_c, y = tf.train.shuffle_batch(input_queues,
+                                                            num_threads=8,
+                                                            batch_size=param.batch_size, 
+                                                            capacity=param.batch_size*64,   
+                                                            min_after_dequeue=param.batch_size*32, 
+                                                            allow_smaller_final_batch=False)    
+    return x_c_w, x_c_c, x_q_w, x_q_c, y
 
 
 def embedding(inputs, shape=None, scope="word_embedding", reuse=None):

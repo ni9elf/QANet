@@ -19,3 +19,6 @@ class Params(object):
     beta1 = 0.8
     beta2 = 0.999
     lr = 0.001
+    num_epochs = 10
+    num_samples = 500
+    logdir = "train"

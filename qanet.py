@@ -12,12 +12,15 @@ import numpy as np
 
 #a tensorflow computation graph is treated as an object of the Graph class
 class Graph(object):
-    def __init__(self, is_training=True):
+    def __init__(self):
         self.graph = tf.Graph()
         with self.graph.as_default():
             #paceholders for inputs and outputs
             B, N, M, C = param.batch_size, param.max_context_words, param.max_question_words, param.max_chars
-            #inputs
+            #get inputs and outputs
+            self.x_c_w, self.x_c_c, self.x_q_w, self.x_q_c, self.y = my.get_batch_data()
+            '''
+            #can also use placeholders as below if needed:
             #input sequence of word vocabulary indices of the context
             self.x_c_w = tf.placeholder(tf.int32, shape=[B, N], name="context_words")
             #input sequence of char vocabulary indices (0 to 25) of the words of the context
@@ -28,7 +31,9 @@ class Graph(object):
             self.x_q_c = tf.placeholder(tf.int32, shape=[B, M, C], name="context_question_chars")
             #output as a one hot encoding of the start position and end position indices over the context words
             self.y = tf.placeholder(tf.int32, shape=[B, N, 2], name="out")
-             
+            '''
+                       
+                       
                        
             '''          
             part1: an embedding layer

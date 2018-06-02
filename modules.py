@@ -79,7 +79,7 @@ def positional_encoding(inputs, scope="positional_enc", reuse=None):
 
 def convolution(inputs, filters, kernel_size, scope, reuse=None):   
     '''
-    Defines a convolution layer with inputs first passed to a layernorm
+    Defines a convolution layer with inputs first passed to a layernorm and a residual connection
     '''
     with tf.variable_scope(scope, reuse=reuse): 
         #use layernorm before applying convolution
@@ -96,7 +96,7 @@ def convolution(inputs, filters, kernel_size, scope, reuse=None):
 
 def multi_head_attention(queries, keys, values, num_heads=8, scope="multi_head_attention", reuse=None):
     '''
-    Defines a multi head attention layer
+    Defines a multi head attention layer with inputs first passed to a layernorm and a residual connection
     '''
     #applies a multi head attention in a self attention fashion since queries, keys and values in QANet are the same Tensor
     with tf.variable_scope(scope, reuse=reuse): 
@@ -158,48 +158,68 @@ def multi_head_attention(queries, keys, values, num_heads=8, scope="multi_head_a
 
 def feedforward(inputs, scope="feedforward", reuse=None):
     '''
-    Defines a feedforward layer
+    Defines a feedforward layer with inputs first passed to a layernorm and a residual connection
     '''
     with tf.variable_scope(scope, reuse=reuse): 
-        #layernorm
+        #apply layernorm
         outputs = tf.contrib.layers.layer_norm(inputs, scope="layernorm", reuse=reuse)
-        #dense layer
-        dims = outputs.get_shape()[-1]        
+        #compute hidden state dimensions
+        dims = outputs.get_shape()[-1]   
+        #dense layer with relu activation     
         outputs = tf.layers.dense(outputs, dims, activation=tf.nn.relu, name="dense", reuse=reuse)
-        #residual link
+        #add residual link
         outputs += inputs
         return outputs
 
 
 def encoder_block(inputs, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope="encoder_block", reuse=None):
+    '''
+    Defines an encoder block: convolution_layer X # + self_attention_layer + feed_forward_layer
+    Each layer applies layernorm to its inputs and contains a residual connection
+    The output of any layer f (conv/self_att/ffn) = f(layernorm(x)) + x
+    '''
     with tf.variable_scope(scope, reuse=reuse):
-        #add positional encoding
+        #add positional encoding to the input
         inputs += positional_encoding(inputs, scope="positional_enc", reuse=reuse)
-        #convolution layers        
+        #apply num_conv_layer convolution layers
         for layer_id in range(num_conv_layer):
             inputs = convolution(inputs, filters, kernel_size, scope="layer_{}".format(layer_id), reuse=reuse)
-        #self-attention using multi head attention layer                
+        #apply self-attention using multi head attention layer with 8 heads             
         outputs = multi_head_attention(queries=inputs, keys=inputs, values=inputs, num_heads=num_att_head, scope="multi_head_attention", reuse=reuse)
-        #feedforward layer
+        #apply feedforward layer
         outputs = feedforward(outputs, scope="feedforward", reuse=reuse)
         return outputs
         
 
 def context_query_attention(context, query, scope="context_query_att", reuse=None):
-    #batch_size, max_words_context, word_dimension
+    '''
+    Defines a context-query attention layer
+    This layer computes both the context-to-query attention and query-to-context attention
+    '''    
+    #dimensions=[B, N, d] ([batch_size, max_words_context, word_dimension])
     B, N, d = context.get_shape().as_list()
-    #batch_size, max_words_question, word_dimension
+    #dimensions=[B, M, d] ([batch_size, max_words_question, word_dimension])
     B, M, d = query.get_shape().as_list()
     with tf.variable_scope(scope, reuse=reuse): 
-        #[B, N, d] -> [B, N, M, d]
+        #apply manual broadcasting to compute pair wise trilinear similarity score
+        #trilinear similarity score is computed between all pairs of context words and question words
+        #dimensions=[B, N, d] -> [B, N, M, d]
         context_expand = tf.tile(tf.expand_dims(context, 2), [1, 1, M, 1])
-        #[B, M, d] -> [B, N, M, d]
+        #dimensions=[B, M, d] -> [B, N, M, d]
         query_expand = tf.tile(tf.expand_dims(query, 1), [1, N, 1, 1])
-        #concat(q, c, (q)dot(c))
+        #concat(q, c, (q)dot(c)) which is the input to the trilinear similarity score computation function
         mat = tf.concat((query_expand, context_expand, query_expand * context_expand), axis=3)
-        #trilinear function as a linear dense layer
+        #apply trilinear function as a linear dense layer
+        #dimensions=[B, N, M, 1]
         similarity = tf.layers.dense(mat, 1, name="dense", reuse=reuse)
+        #dimensions=[B, N, M]
         similarity = tf.squeeze(similarity)
-        matrix_a = tf.matmul(similarity, query)
-        matrix_b = tf.matmul(tf.matmul(similarity, tf.transpose(similarity, [0, 2, 1])), context)
+        #normalizing by applying softmax over rows of similarity matrix
+        similarity_row_normalized = tf.nn.softmax(similarity, axis=1)
+        #normalizing by applying softmax over columns of similarity matrix
+        similarity_column_normalized = tf.nn.softmax(similarity, axis=2)
+        #computing A = S_bar X Question
+        matrix_a = tf.matmul(similarity_row_normalized, query)
+        #computing B = S_bar X S_double_bar X Context
+        matrix_b = tf.matmul(tf.matmul(similarity_row_normalized, tf.transpose(similarity_column_normalized, [0, 2, 1])), context)
         return matrix_a, matrix_b

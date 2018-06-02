@@ -6,8 +6,8 @@ Author: Nigel Fernandez
 
 class Params(object):
     batch_size = 32
-    max_context_words = 40
-    max_query_words = 10
+    max_context_words = 400
+    max_query_words = 30
     word_vocab_size = 10000
     char_vocab_size = 26
     word_emb_dim = 300

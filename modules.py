@@ -88,7 +88,7 @@ def convolution(inputs, filters, kernel_size, scope, reuse=None):
         outputs = tf.contrib.layers.layer_norm(inputs, scope="layernorm", reuse=reuse)
         #perform a 1D convolution
         outputs = tf.layers.conv1d(outputs, filters, kernel_size, padding="same", name="convolution", reuse=reuse)                
-        #ATTENTION: there is an ambiguity in the paper here, the input dimension of the hidden state of each wod to the first convolution layer of either the context of question encoder block is 500, while the output after convolution will map the hidden state to 128 dimenstion, therefore a residual link cannot be computed due to a dimension mismatch (500 != 128)
+        #NOTE: there is an ambiguity in the paper here, the input dimension of the hidden state of each wod to the first convolution layer of either the context of question encoder block is 500, while the output after convolution will map the hidden state to 128 dimenstion, therefore a residual link cannot be computed due to a dimension mismatch (500 != 128)
         #if inputs are compatible with outputs then create a residual link
         if(inputs.get_shape()[-1] == outputs.get_shape()[-1]):
             #residual link

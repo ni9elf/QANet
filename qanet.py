@@ -33,19 +33,26 @@ class Graph(object):
             '''          
             part1: an embedding layer
             '''
-            VW, VC, DW, DC = param.word_vocab_size, param.char_vocab_size, param.word_emb_dim, param.char_emb_dim     
+            VW, VC, DW, DC = param.word_vocab_size, param.char_vocab_size, param.word_emb_dim, param.char_emb_dim 
+            #compute word embeddings of the context words through 300 dimensional GloVe embedding
             self.x_c_w_emb = my.embedding(inputs=self.x_c_w, shape=[VW, DW], scope="word_embedding", reuse=None)
+            #compute word embeddings of the question words through 300 dimensional GloVe embedding
             self.x_q_w_emb = my.embedding(inputs=self.x_q_w, scope="word_embedding", reuse=True)
+            #compute through character embeddings of the context words
             self.x_c_c_emb = my.embedding(inputs=self.x_c_c, shape=[VC, DC], scope="char_embedding", reuse=None)
+            #compute character embeddings of the question words
             self.x_q_c_emb = my.embedding(inputs=self.x_q_c, scope="char_embedding", reuse=True)
             
-            #max pooling
+            #max pooling over character embeddings to get fixed size embedding of each word
             self.x_c_c_emb = tf.reduce_max(self.x_c_c_emb, reduction_indices=[2])
+            #concatenate GloVe embedding with character embedding
             self.x_c_emb = tf.concat(values=[self.x_c_w_emb, self.x_c_c_emb], axis=2, name="x_context_emb")
+            #max pooling over character embeddings to get fixed size embedding of each word
             self.x_q_c_emb = tf.reduce_max(self.x_q_c_emb, reduction_indices=[2])
+            #concatenate GloVe embedding with character embedding
             self.x_q_emb = tf.concat(values=[self.x_q_w_emb, self.x_q_c_emb], axis=2, name="x_question_emb")            
             
-            #highway network of 2 layers
+            #apply a highway network of 2 layers on top of computed embedding
             self.x_c_emb = my.highway_network(inputs=self.x_c_emb, num_layers=param.highway_num_layers, use_bias=True, transform_bias=-1.0, scope='highway_net', reuse=None)
             self.x_q_emb = my.highway_network(inputs=self.x_q_emb, num_layers=param.highway_num_layers, use_bias=True, transform_bias=-1.0, scope='highway_net',  reuse=True)            
             
@@ -53,13 +60,17 @@ class Graph(object):
             '''
             part2: an embedding encoder layer
             '''
+            #single encoder block: convolution_layer X # + self_attention_layer + feed_forward_layer
+            #apply 1 encoder of 1 encoder block on context embedding
             self.x_c_enc = my.encoder_block(inputs=self.x_c_emb, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=None)
+            #apply 1 encoder of 1 encoder block on question embedding
             self.x_q_enc = my.encoder_block(inputs=self.x_q_emb, num_conv_layer=4, filters=128, kernel_size=7, num_att_head=8, scope='encoder_block', reuse=True)
             
             
             '''           
             part3: a context-query attention layer
             '''
+            #apply a context-query attention layer to compute context-to-query attention and query-to-context attention
             self.att_a, self.att_b = my.context_query_attention(context=self.x_c_enc, query=self.x_q_enc, scope='context_query_att', reuse=None)
             
             

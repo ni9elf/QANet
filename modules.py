@@ -100,7 +100,7 @@ def multi_head_attention(queries, keys, values, num_heads=8, scope="multi_head_a
     '''
     #applies a multi head attention in a self attention fashion since queries, keys and values in QANet are the same Tensor
     with tf.variable_scope(scope, reuse=reuse): 
-        #dimension=[B, N, d]
+        #dimension=[B, N, d] ([batch_size, max_seq_length, hidden_state_dimension])
         Q = queries
         K = keys
         V = values
@@ -109,29 +109,37 @@ def multi_head_attention(queries, keys, values, num_heads=8, scope="multi_head_a
         dims = queries.get_shape().as_list()[-1] / num_heads
         #split each input tensor into num_head parts (into 8 parts)
         #we split each tensor to ensure computation cost remains same even though num_head attention layers are called
-        #dimensions=[h, B, N, d/h]
+        #dimensions=[h, B, N, d/h] ([num_heads, batch_size, max_seq_length, hidden_state_dimension / num_heads])
+        #note that tf.split returns a sequence of tensors
         Q_s = tf.split(Q, num_heads, axis=2)
         K_s = tf.split(K, num_heads, axis=2)
         V_s = tf.split(V, num_heads, axis=2)
         #project using different learned linear projections
+        #dimensions=[h, B, N, d/h]
         Q_s = [tf.layers.dense(q, dims, activation=tf.nn.relu) for q in Q_s]
         K_s = [tf.layers.dense(q, dims, activation=tf.nn.relu) for k in K_s]
         V_s = [tf.layers.dense(q, dims, activation=tf.nn.relu) for v in V_s]
         #concatenate different projections for parallel scaled dot product attention
+        #dimensions=[h*B, N, d/h]
         Q_c = tf.concat(Q_s, axis=0)
         K_c = tf.concat(K_s, axis=0)
         V_c = tf.concat(V_s, axis=0)
         #perform a scaled dot product attention in parallel for all heads
+        #dimensions=[h*B, N, N]
         outputs = tf.matmul(Q_c, tf.transpose(K_c, [0, 2, 1]))
         #scale outputs using square_root(K.shape[-1])
+        #dimensions=[h*B, N, N]
         outputs = outputs / (K_s[0].get_shape().as_list()[-1] ** 0.5)
         #applying softmax normalization
+        #dimensions=[h*B, N, N]
         outputs = tf.nn.softmax(outputs)
-        #applying weights on values
-        #restore shape of values to original input shape
+        #applying weights on values        
+        #dimensions=[h*B, N, d/h]
         outputs = tf.matmul(outputs, V_c)
-        outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2 )        
-        #residual link
+        #restore shape of values to original input shape
+        #dimensions=[B, N, d]
+        outputs = tf.concat(tf.split(outputs, num_heads, axis=0), axis=2)        
+        #use a residual link
         outputs += queries
         return outputs
 

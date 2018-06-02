@@ -14,7 +14,8 @@ A TensorFlow implementation of [QANet](https://arxiv.org/abs/1804.09541), an eff
 
 ## Usage
 
-To create the TensorFlow computational graph of the QANet architecture run:
+To create the TensorFlow computation graph of the QANet architecture run:
+
 ```$ python main.py```
 
 ## Code Organization

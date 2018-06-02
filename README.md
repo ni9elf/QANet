@@ -1,6 +1,6 @@
 # QANet in Tensorflow
 
-A Tensorflow implementation of [QANet](https://arxiv.org/abs/1804.09541), an efficient reading comprehension model that is exclusively built upon convolutions and self-attentions. By not using recurrent connections, a 13x speedup in training is achieved while maintaining good accuracy. Notably, the EM accuracy score beats human performance on the SQuAD dataset.
+A TensorFlow implementation of [QANet](https://arxiv.org/abs/1804.09541), an efficient reading comprehension model that is exclusively built upon convolutions and self-attentions. By not using recurrent connections, a 13x speedup in training is achieved while maintaining good accuracy. Notably, the EM accuracy score beats human performance on the SQuAD dataset.
 
 <p align="center"> 
 <img src="assets/architecture.png">
@@ -11,6 +11,11 @@ A Tensorflow implementation of [QANet](https://arxiv.org/abs/1804.09541), an eff
 * Python 2.7
 * Tensorflow 1.8
 * NumPy 1.14.2
+
+## Usage
+
+To create the TensorFlow computational graph of the QANet architecture run:
+```$ python main.py```
 
 ## Code Organization
 

@@ -1,5 +1,7 @@
 '''
 File params.py defines a class Params for hyperparameter declarations.
+
+Author: Nigel Fernandez
 '''
 
 class Params(object):

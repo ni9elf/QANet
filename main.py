@@ -1,5 +1,6 @@
 '''
 File main.py contains the main program. The computation graph for QANet is built here and launched in a session for training.
+
 Author: Nigel Fernandez
 '''
 

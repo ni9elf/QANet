@@ -19,5 +19,6 @@ The OOP paradigm is followed in structuring the model code in classes. Modularit
 ## Author
 
 [@ni9elf](https://github.com/ni9elf)
+
 Nigel Fernandez 
 

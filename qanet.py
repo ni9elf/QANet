@@ -138,5 +138,6 @@ class Graph(object):
             #using ADAM optimizer with beta1=0.8, beta2=0.999 and epsilon=1e-7
             self.optimizer = tf.train.AdamOptimizer(learning_rate=param.lr, beta1=param.beta1, beta2=param.beta2, epsilon=param.epsilon_2)
             self.train_op = self.optimizer.minimize(self.loss, global_step=self.global_step)
+            #loss summary
             tf.summary.scalar('loss', self.loss)
             self.merged = tf.summary.merge_all()

@@ -16,7 +16,7 @@ A TensorFlow implementation of [QANet](https://arxiv.org/abs/1804.09541), an eff
 
 To create the TensorFlow computation graph of the QANet architecture run:
 
-```$ python main.py```
+    $ python main.py
 
 ## Code Organization
 

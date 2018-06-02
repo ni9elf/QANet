@@ -83,9 +83,9 @@ def convolution(inputs, filters, kernel_size, scope, reuse=None):
     '''
     with tf.variable_scope(scope, reuse=reuse): 
         #use layernorm before applying convolution
-        outputs = tf.contrib.layers.layer_norm(inputs, scope="norm_"+scope, reuse=reuse)
+        outputs = tf.contrib.layers.layer_norm(inputs, scope="layernorm", reuse=reuse)
         #perform a 1D convolution
-        outputs = tf.layers.conv1d(outputs, filters, kernel_size, padding="same", name="conv_"+scope, reuse=reuse)                
+        outputs = tf.layers.conv1d(outputs, filters, kernel_size, padding="same", name="convolution", reuse=reuse)                
         #ATTENTION: there is an ambiguity in the paper here, the input dimension of the hidden state of each wod to the first convolution layer of either the context of question encoder block is 500, while the output after convolution will map the hidden state to 128 dimenstion, therefore a residual link cannot be computed due to a dimension mismatch (500 != 128)
         #if inputs are compatible with outputs then create a residual link
         if(inputs.get_shape()[-1] == outputs.get_shape()[-1]):
@@ -100,10 +100,22 @@ def multi_head_attention(queries, keys, values, num_heads=8, scope="multi_head_a
     '''
     #applies a multi head attention in a self attention fashion since queries, keys and values in QANet are the same Tensor
     with tf.variable_scope(scope, reuse=reuse): 
-        #dimension=[B, N, d] ([batch_size, max_seq_length, hidden_state_dimension])
-        Q = queries
-        K = keys
-        V = values
+        #use layernorm before applying multi_head_attention
+        #if all inputs are equal implying self attention, perform layernorm on any one input tensor
+        if (tf.equal(queries, keys) and tf.equal(queries, values) and tf.equal(keys, values)):        
+            queries = tf.contrib.layers.layer_norm(queries, scope="layernorm", reuse=reuse)
+            #dimension=[B, N, d] ([batch_size, max_seq_length, hidden_state_dimension])
+            Q = queries
+            K = queries
+            V = queries        
+        else:
+            queries = tf.contrib.layers.layer_norm(queries, scope="layernorm", reuse=reuse)
+            keys = tf.contrib.layers.layer_norm(keys, scope="layernorm", reuse=reuse)
+            values = tf.contrib.layers.layer_norm(values, scope="layernorm", reuse=reuse)
+            #dimension=[B, N, d] ([batch_size, max_seq_length, hidden_state_dimension])
+            Q = queries
+            K = keys
+            V = values
         #compute the dimension of each head (parallel attention layer)
         #in QANet this will be (hidden_state_dimension / num_heads) = 128 / 8 = 16
         dims = queries.get_shape().as_list()[-1] / num_heads
@@ -145,12 +157,15 @@ def multi_head_attention(queries, keys, values, num_heads=8, scope="multi_head_a
 
 
 def feedforward(inputs, scope="feedforward", reuse=None):
+    '''
+    Defines a feedforward layer
+    '''
     with tf.variable_scope(scope, reuse=reuse): 
         #layernorm
-        outputs = tf.contrib.layers.layer_norm(inputs, scope="norm_"+scope, reuse=reuse)
+        outputs = tf.contrib.layers.layer_norm(inputs, scope="layernorm", reuse=reuse)
         #dense layer
         dims = outputs.get_shape()[-1]        
-        outputs = tf.layers.dense(outputs, dims, activation=tf.nn.relu, name="dense_"+scope, reuse=reuse)
+        outputs = tf.layers.dense(outputs, dims, activation=tf.nn.relu, name="dense", reuse=reuse)
         #residual link
         outputs += inputs
         return outputs
@@ -183,8 +198,7 @@ def context_query_attention(context, query, scope="context_query_att", reuse=Non
         #concat(q, c, (q)dot(c))
         mat = tf.concat((query_expand, context_expand, query_expand * context_expand), axis=3)
         #trilinear function as a linear dense layer
-        #TODO: no need to give "dense_"+scope, just name since scope/name automatic
-        similarity = tf.layers.dense(mat, 1, name="dense_"+scope, reuse=reuse)
+        similarity = tf.layers.dense(mat, 1, name="dense", reuse=reuse)
         similarity = tf.squeeze(similarity)
         matrix_a = tf.matmul(similarity, query)
         matrix_b = tf.matmul(tf.matmul(similarity, tf.transpose(similarity, [0, 2, 1])), context)

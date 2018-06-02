@@ -22,7 +22,6 @@ class Graph(object):
              
                        
                        
-            #TODO: can explore tf.AUTO_REUSE for weight sharing
             #part1: an embedding layer
             VW, VC, DW, DC = param.word_vocab_size, param.char_vocab_size, param.word_emb_dim, param.char_emb_dim     
             self.x_c_w_emb = my.embedding(inputs=self.x_c_w, shape=[VW, DW], scope="word_embedding", reuse=None)

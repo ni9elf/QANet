@@ -100,12 +100,16 @@ def multi_head_attention(queries, keys, values, num_heads=8, scope="multi_head_a
     '''
     #applies a multi head attention in a self attention fashion since queries, keys and values in QANet are the same Tensor
     with tf.variable_scope(scope, reuse=reuse): 
+        #dimension=[B, N, d]
         Q = queries
         K = keys
         V = values
-        
+        #compute the dimension of each head (parallel attention layer)
+        #in QANet this will be (hidden_state_dimension / num_heads) = 128 / 8 = 16
         dims = queries.get_shape().as_list()[-1] / num_heads
-        #split into # of head parts
+        #split each input tensor into num_head parts (into 8 parts)
+        #we split each tensor to ensure computation cost remains same even though num_head attention layers are called
+        #dimensions=[h, B, N, d/h]
         Q_s = tf.split(Q, num_heads, axis=2)
         K_s = tf.split(K, num_heads, axis=2)
         V_s = tf.split(V, num_heads, axis=2)
